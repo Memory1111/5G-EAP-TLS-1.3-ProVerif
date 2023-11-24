@@ -1,0 +1,510 @@
+free c_ue_seaf:channel.
+free c_seaf_ausf:channel[private].
+free c_ausf_udm:channel[private].
+free c:channel.
+
+free test:bitstring[private].
+
+type handshake.
+type nonce.
+type ticket.
+type pskex.
+type exponent.
+type g.
+type key.
+type certificate.
+type pkey.
+type skey.
+type spkey.
+type sskey.
+
+
+(* constant *)
+(* handshake message type *)
+const CLIEN_HELLO:bitstring.
+const SERVER_HELLO:bitstring.
+const END_OF_EARLY_DATA:bitstring.
+const ENCRYPTED_EXTENSION:bitstring.
+const CERTIFATE_REQUEST:bitstring.
+const CERTIFICATE:bitstring.
+const CERTIFICATE_VERIFY:bitstring.
+const FINISHED:bitstring.
+const NEW_SESSION_TICKET:bitstring.
+const KEY_UPDATE:bitstring.
+(* tls version *)
+const TLS12:bitstring.
+const TLS13:bitstring.
+(* CipherSuite *)
+const CIPHERSUIT_WEAK:bitstring.
+const CIPHERSUIT_STRONG:bitstring.
+(* suport group *)
+const GROUP_WEAK:bitstring.
+const GROUP_STRONG:bitstring.
+(* signature algorithm *)
+const SIGNATURE_WEAK:bitstring.
+const SIGNATURE_STRONG:bitstring.
+(* psk_key_exchange_modes *)
+const PSK_KE:bitstring.
+const PSK_DHE_KE:bitstring.
+(* post_handshake_auth *)
+const POST_HANDSHARE_AUTH:bitstring.
+(* group *)
+const G:g.
+(* bitstring zero *)
+const ZERO:bitstring.
+(* label *)
+const RES_BINDER:bitstring.
+const S_HS_TRAFFIC:bitstring.
+const C_HS_TRAFFIC:bitstring.
+const DERIVED:bitstring.
+const RES_MASRET:bitstring.
+const FINISHED_LABLE:bitstring.
+const RESUMPTION:bitstring.
+const C_AP_TRAFFIC:bitstring.
+const S_AP_TRAFFIC:bitstring.
+(* certficate *)
+const CERTIFICATE_UE:certificate.
+const CERTIFICATE_AUSF:certificate.
+(* pskextention *)
+const ZERO_PSK_EXTENTiON:pskex.
+
+
+(* table *)
+table SessionId(bitstring).
+table AUSFTicketPSK1(ticket,key).(* ticket and PSK *)
+table AUSFTicketPSK2(ticket,key).(* ticket and PSK *)
+table AUSFTicketPSK3(ticket,key).(* ticket and PSK *)
+table UETicketPSK1(ticket,key).(* ticket and PSK *)
+table UETicketPSK2(ticket,key).(* ticket and PSK *)
+table UETicketPSK3(ticket,key).(* ticket and PSK *)
+
+table AttackerSessionId(bitstring).
+
+
+(* Handshake contain its msg_type and content *)
+fun Handshake(bitstring,bitstring):bitstring[data].
+fun ClientHello(bitstring,nonce,bitstring,bitstring,bitstring):bitstring[data].
+fun ServerHello(bitstring,nonce,bitstring,bitstring,bitstring):bitstring[data].
+fun EncryptedExtension(bitstring):bitstring[data].
+fun CertificateRequest(bitstring):bitstring[data].(* encrypted: certificate_request_context, suportsignature *)
+fun Certificate(bitstring):bitstring[data].(* encrypted: certificate_request_context, cetificate *)
+fun CertificateVerify(bitstring):bitstring[data].
+fun Finished(bitstring):bitstring[data].
+fun NewSessionTicket(bitstring):bitstring[data].
+
+(* extension in ClientHello *)
+fun ClientExtention(bitstring,bitstring,pskex,bitstring,bitstring,bitstring,g):bitstring[data].(* supported_groups weak or strong, signature_algorithms weak or strong, PreSharedKeyExtension, supported_versions, psk_key_exchange_modes, post_handshake_auth, key_share*)
+fun PreshareKeyExtention(ticket,bitstring):pskex[data].(* identity and binder *)
+fun ServerExtention(bitstring,pskex,g):bitstring[data].(*supported_versions,pre_shared_key,key_share*)
+fun ExtentionToBeEncryped(bitstring):bitstring[data].(*supported_groups*)
+
+(* function *)
+fun exp(g,exponent):g.
+equation forall x:exponent,y:exponent;
+	exp(exp(G,x),y) = exp(exp(G,y),x).
+fun Hash(bitstring):bitstring.
+fun HKDFExtract(bitstring,bitstring):key.(*left of it, up of it*)
+fun DeriveSecret(key,bitstring,bitstring):key.(*secret, label, hash of message*)
+
+fun senc(bitstring,key):bitstring.
+reduc forall x:bitstring,y:key;
+	sdec(senc(x,y),y) = x.
+
+fun spk(sskey):spkey.
+
+fun sign(bitstring,sskey):bitstring.
+reduc forall x:bitstring,y:sskey;
+	checksign(sign(x,y),spk(y)) = x.
+
+fun g2b(g):bitstring.
+reduc forall x:g;
+	b2g(g2b(x)) = x.
+
+fun k2b(key):bitstring.
+reduc forall x:key;
+	b2k(k2b(x)) = x.
+
+fun n2b(nonce):bitstring.
+reduc forall x:nonce;
+	b2n(n2b(x)) = x.
+
+fun Ticket(nonce,ticket):bitstring[data].(* ticket_nonce and ticket *)
+
+fun PskEx(ticket,ticket,ticket):pskex[data].(* ticket and binder *)
+
+(* event *)
+event UE_SEND_AUTH_MES(bitstring,bitstring,bitstring).
+event UE_AUTH_AUSF(bitstring,bitstring,bitstring).
+event AUSF_SEND_AUTH_MES(bitstring,bitstring,bitstring).
+event AUSF_AUTH_UE(bitstring,bitstring,bitstring).
+event UE_SEND_AUTH_MES_RESUMPTION(bitstring).
+event UE_AUTH_AUSF_RESUMPTION(bitstring).
+event AUSF_SEND_AUTH_MES_RESUMPTION(bitstring).
+event AUSF_AUTH_UE_RESUMPTION(bitstring).
+event LINK_SESSIONID(bitstring).
+event LINK_TICKET(pskex).
+
+(* query *)
+query x:bitstring,y:bitstring,z:bitstring;
+	inj-event(AUSF_AUTH_UE(x,y,z)) ==> inj-event(UE_SEND_AUTH_MES(x,y,z)).
+query x:bitstring,y:bitstring,z:bitstring;
+	inj-event(UE_AUTH_AUSF(x,y,z)) ==> inj-event(AUSF_SEND_AUTH_MES(x,y,z)).
+query x:bitstring;
+	inj-event(AUSF_AUTH_UE_RESUMPTION(x)) ==> inj-event(UE_SEND_AUTH_MES_RESUMPTION(x)).
+query x:bitstring,y:bitstring,z:bitstring;
+	inj-event(UE_AUTH_AUSF_RESUMPTION(x)) ==> inj-event(AUSF_SEND_AUTH_MES_RESUMPTION(x)).
+query x:bitstring;
+	event(LINK_SESSIONID(x)).
+query x:pskex;
+	event(LINK_TICKET(x)).
+query attacker(test).
+
+
+let UE(spkausf:spkey,sskue:sskey) = 
+	new rand:nonce;
+	new x:exponent;
+	let gx:g = exp(G,x) in 
+	let extention:bitstring = ClientExtention(GROUP_STRONG,SIGNATURE_STRONG,ZERO_PSK_EXTENTiON,TLS13,PSK_KE,POST_HANDSHARE_AUTH,gx) in 
+	get SessionId(sessionid) in 
+	let clienthello:bitstring = ClientHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) in 
+	out(c_ue_seaf,clienthello);
+	in(c_ue_seaf,serverhello:bitstring);
+	let ServerHello(TLS12,randausf,sessionid,CIPHERSUIT_STRONG,extention) = serverhello in  
+	let ServerExtention(TLS13,pskextention,gy) = extention in 
+	(* psk derive from resumption_master_secret  *)
+	let earlysecret:key = HKDFExtract(ZERO,ZERO) in 
+	let derived:key = DeriveSecret(earlysecret,DERIVED,ZERO) in
+	let gxy:g = exp(gy,x) in  
+	(* gxy to bitstring, derived to bitstring *)
+	let gxybits:bitstring = g2b(gxy) in 
+	let derivedbits:bitstring = k2b(derived) in 
+	let handshakesecret:key = HKDFExtract(gxybits,derivedbits) in 
+	let shsts:key = DeriveSecret(handshakesecret,S_HS_TRAFFIC,Hash((clienthello,serverhello))) in
+	in(c_ue_seaf,encryptedextension:bitstring);
+	let EncryptedExtension(encryptedex) = encryptedextension in
+	let extentiontbe:bitstring = sdec(encryptedex,shsts) in 
+	let ExtentionToBeEncryped(suportgroup) = extentiontbe in 
+	in(c_ue_seaf,certificaterequest:bitstring);
+	let CertificateRequest(encryptedcertreq) = certificaterequest in 
+	let (=ZERO,=SIGNATURE_STRONG) = sdec(encryptedcertreq,shsts) in 
+	in(c_ue_seaf,certificate:bitstring);
+	let Certificate(encryptedcert) = certificate in 
+	let (=ZERO,=CERTIFICATE_AUSF) = sdec(encryptedcert,shsts) in 
+	in(c_ue_seaf,certificateverify:bitstring);
+	let CertificateVerify(encryptedcertverif) = certificateverify in 
+	let hash:bitstring = Hash((clienthello,serverhello,certificaterequest,certificate)) in 
+	if hash = checksign(sdec(encryptedcertverif,shsts),spkausf) then
+	in(c_ue_seaf,finished:bitstring);
+	let Kfinish:key = DeriveSecret(shsts,FINISHED_LABLE,ZERO) in 
+	let Finished(encryptedfinished) = finished in 
+	let hash:bitstring = Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify)) in 
+	if hash = sdec(encryptedfinished,Kfinish) then 
+	event UE_AUTH_AUSF(certificate,certificateverify,finished);
+
+
+	let chsts:key = DeriveSecret(handshakesecret,C_HS_TRAFFIC,Hash((clienthello,serverhello))) in
+	let certificateue:bitstring = Certificate(senc((ZERO,CERTIFICATE_UE),chsts)) in 
+	let certificateverifyue:bitstring = CertificateVerify(senc(sign(Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished,certificateue)),sskue),chsts)) in 
+	let finishedue:bitstring = Finished(senc(Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished,certificateue,certificateverifyue)),Kfinish)) in 
+	event UE_SEND_AUTH_MES(certificateue,certificateverifyue,finishedue);
+	out(c_ue_seaf,certificateue);
+	out(c_ue_seaf,certificateverifyue); 
+	out(c_ue_seaf,finishedue);
+
+
+	let hssbits:bitstring = k2b(handshakesecret) in 
+	let mastersecret:key = HKDFExtract(ZERO,hssbits) in 
+	let resumptionmastersecret:key = DeriveSecret(mastersecret,RES_MASRET,Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished,certificateue,certificateverifyue,finishedue))) in 
+	let serverapplicationtrafficsecret:key = DeriveSecret(mastersecret,S_AP_TRAFFIC,Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished))) in 
+	in(c_ue_seaf,newsessionticket1:bitstring);
+	let NewSessionTicket(encnewsessionticket1) = newsessionticket1 in 
+	let (ticketnonce1:nonce,ticketid1:ticket) = sdec(encnewsessionticket1,serverapplicationtrafficsecret) in 
+	let psk1:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce1))) in 
+	insert UETicketPSK1(ticketid1,psk1);
+	in(c_ue_seaf,newsessionticket2:bitstring);
+	let NewSessionTicket(encnewsessionticket2) = newsessionticket2 in 
+	let (ticketnonce2:nonce,ticketid2:ticket) = sdec(encnewsessionticket2,serverapplicationtrafficsecret) in 
+	let psk2:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce2))) in 
+	insert UETicketPSK2(ticketid2,psk2);
+	in(c_ue_seaf,newsessionticket3:bitstring);
+	let NewSessionTicket(encnewsessionticket3) = newsessionticket3 in 
+	let (ticketnonce3:nonce,ticketid3:ticket) = sdec(encnewsessionticket3,serverapplicationtrafficsecret) in 
+	let psk3:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce3))) in 
+	insert UETicketPSK3(ticketid3,psk3);
+
+	out(c,test).
+
+
+
+
+
+
+
+let SEAF() = 
+	in(c_ue_seaf,clienthello:bitstring);
+	out(c_seaf_ausf,clienthello);
+	in(c_seaf_ausf,serverhello:bitstring);
+	out(c_ue_seaf,serverhello);
+	in(c_seaf_ausf,encryptedextension:bitstring);
+	out(c_ue_seaf,encryptedextension);
+	in(c_seaf_ausf,certificaterequest:bitstring);
+	out(c_ue_seaf,certificaterequest);
+	in(c_seaf_ausf,certificate:bitstring);
+	out(c_ue_seaf,certificate);
+	in(c_seaf_ausf,certificateverify:bitstring);
+	out(c_ue_seaf,certificateverify);
+	in(c_seaf_ausf,finished:bitstring);
+	out(c_ue_seaf,finished);
+	in(c_ue_seaf,certificateue:bitstring);
+	out(c_seaf_ausf,certificateue);
+	in(c_ue_seaf,certificateverifyue:bitstring);
+	out(c_seaf_ausf,certificateverifyue);
+	in(c_ue_seaf,finishedue:bitstring);
+	out(c_seaf_ausf,finishedue);
+	in(c_seaf_ausf,newsessionticket1:bitstring);
+	out(c_ue_seaf,newsessionticket1);
+	in(c_seaf_ausf,newsessionticket2:bitstring);
+	out(c_ue_seaf,newsessionticket2);
+	in(c_seaf_ausf,newsessionticket3:bitstring);
+	out(c_ue_seaf,newsessionticket3);
+	phase 1;
+	in(c_ue_seaf,clienthello:bitstring);
+	out(c_seaf_ausf,clienthello);
+	in(c_seaf_ausf,serverhello:bitstring);
+	out(c_ue_seaf,serverhello);
+	in(c_seaf_ausf,encryptedextension:bitstring);
+	out(c_ue_seaf,encryptedextension);
+	in(c_seaf_ausf,finished:bitstring);
+	out(c_ue_seaf,finished);
+	in(c_ue_seaf,finishedue:bitstring);
+	out(c_seaf_ausf,finishedue);
+	in(c_seaf_ausf,newsessionticket1:bitstring);
+	out(c_ue_seaf,newsessionticket1).
+
+
+
+let AUSF(sskausf:sskey,spkue:spkey) = 
+	in(c_seaf_ausf,clienthello:bitstring);
+	let ClientHello(TLS12,randue,sessionid,CIPHERSUIT_STRONG,extention) = clienthello in 
+	let ClientExtention(suportgroup,suportsignature,pskextention,suportversion,PSK_KE,POST_HANDSHARE_AUTH,gx) = extention in 
+	new rand:nonce;
+	new y:exponent;
+	let gy:g = exp(G,y) in 
+	let extention:bitstring = ServerExtention(TLS13,pskextention,gy) in 
+	let serverhello:bitstring = ServerHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) in 
+	out(c_seaf_ausf,serverhello);
+	(* psk derive from resumption_master_secret  *)
+	let earlysecret:key = HKDFExtract(ZERO,ZERO) in 
+	let derived:key = DeriveSecret(earlysecret,DERIVED,ZERO) in
+	let gxy:g = exp(gx,y) in  
+	(* gxy to bitstring, derived to bitstring *)
+	let gxybits:bitstring = g2b(gxy) in 
+	let derivedbits:bitstring = k2b(derived) in 
+	let handshakesecret:key = HKDFExtract(gxybits,derivedbits) in 
+	let shsts:key = DeriveSecret(handshakesecret,S_HS_TRAFFIC,Hash((clienthello,serverhello))) in 
+	let extentiontbe:bitstring = ExtentionToBeEncryped(suportgroup) in 
+	let encryptedextension:bitstring = EncryptedExtension(senc(extentiontbe,shsts)) in 
+	out(c_seaf_ausf,encryptedextension);
+	let certificaterequest:bitstring = CertificateRequest(senc((ZERO,suportsignature),shsts)) in 
+	out(c_seaf_ausf,certificaterequest);
+	let certificate:bitstring = Certificate(senc((ZERO,CERTIFICATE_AUSF),shsts)) in 
+	let certificateverify:bitstring = CertificateVerify(senc(sign(Hash((clienthello,serverhello,certificaterequest,certificate)),sskausf),shsts)) in 
+	let Kfinish:key = DeriveSecret(shsts,FINISHED_LABLE,ZERO) in 
+	let finished:bitstring = Finished(senc(Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify)),Kfinish)) in 
+	event AUSF_SEND_AUTH_MES(certificate,certificateverify,finished);
+	out(c_seaf_ausf,certificate);
+	out(c_seaf_ausf,certificateverify);
+	out(c_seaf_ausf,finished);
+
+
+	let chsts:key = DeriveSecret(handshakesecret,C_HS_TRAFFIC,Hash((clienthello,serverhello))) in
+	in(c_seaf_ausf,certificateue:bitstring);
+	let Certificate(encryptedcert) = certificateue in 
+	let (=ZERO,=CERTIFICATE_UE) = sdec(encryptedcert,chsts) in 
+	in(c_seaf_ausf,certificateverifyue:bitstring);
+	let CertificateVerify(encryptedcertverifue) = certificateverifyue in 
+	let hash:bitstring = Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished,certificateue)) in 
+	if hash = checksign(sdec(encryptedcertverifue,chsts),spkue) then
+	in(c_seaf_ausf,finishedue:bitstring);
+	let Finished(encryptedfinished) = finishedue in 
+	let hash:bitstring = Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished,certificateue,certificateverifyue)) in 
+	if hash = sdec(encryptedfinished,Kfinish) then 
+	event AUSF_AUTH_UE(certificateue,certificateverifyue,finishedue);
+
+	let hssbits:bitstring = k2b(handshakesecret) in 
+	let mastersecret:key = HKDFExtract(ZERO,hssbits) in 
+	let resumptionmastersecret:key = DeriveSecret(mastersecret,RES_MASRET,Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished,certificateue,certificateverifyue,finishedue))) in 
+	new ticketnonce1:nonce;
+	let psk1:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce1))) in 
+	new ticketnonce2:nonce;
+	let psk2:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce2))) in 
+	new ticketnonce3:nonce;
+	let psk3:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce3))) in 
+	new ticketid1:ticket;
+	new ticketid2:ticket;
+	new ticketid3:ticket;
+	insert AUSFTicketPSK1(ticketid1,psk1);
+	insert AUSFTicketPSK2(ticketid2,psk2); 
+	insert AUSFTicketPSK3(ticketid3,psk3);
+	let serverapplicationtrafficsecret:key = DeriveSecret(mastersecret,S_AP_TRAFFIC,Hash((clienthello,serverhello,certificaterequest,certificate,certificateverify,finished))) in 
+	let newsessionticket1:bitstring = NewSessionTicket(senc((ticketnonce1,ticketid1),serverapplicationtrafficsecret)) in 
+	let newsessionticket2:bitstring = NewSessionTicket(senc((ticketnonce2,ticketid2),serverapplicationtrafficsecret)) in
+	let newsessionticket3:bitstring = NewSessionTicket(senc((ticketnonce3,ticketid3),serverapplicationtrafficsecret)) in 
+	out(c_seaf_ausf,newsessionticket1);
+	out(c_seaf_ausf,newsessionticket2);
+	out(c_seaf_ausf,newsessionticket3);
+
+
+	out(c,test).
+
+
+
+let ResumptionUE() = 
+	get UETicketPSK1(ticketid1,psk1) in 
+	get UETicketPSK2(ticketid2,psk2) in 
+	get UETicketPSK3(ticketid3,psk3) in 
+	let pskextention:pskex = PskEx(ticketid1,ticketid2,ticketid3) in 
+	new rand:nonce;
+	new x:exponent;
+	let gx:g = exp(G,x) in 
+	let extention:bitstring = ClientExtention(GROUP_STRONG,SIGNATURE_STRONG,pskextention,TLS13,PSK_KE,POST_HANDSHARE_AUTH,gx) in 
+	get SessionId(sessionid) in 
+	let clienthello:bitstring = ClientHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) in 
+	out(c_ue_seaf,clienthello);
+	in(c_ue_seaf,serverhello:bitstring);
+	let ServerHello(TLS12,randausf,sessionid,CIPHERSUIT_STRONG,extention) = serverhello in  
+	let ServerExtention(TLS13,pskextention,gy) = extention in 
+	let PskEx(xticketid1,xticketid2,xticketid3) = pskextention in 
+	if xticketid1 = ticketid1 then
+	let psk1bits:bitstring = k2b(psk1) in 
+	let earlysecret:key = HKDFExtract(psk1bits,ZERO) in 
+	let derived:key = DeriveSecret(earlysecret,DERIVED,ZERO) in
+	let gxy:g = exp(gy,x) in  
+	(* gxy to bitstring, derived to bitstring *)
+	let gxybits:bitstring = g2b(gxy) in 
+	let derivedbits:bitstring = k2b(derived) in 
+	let handshakesecret:key = HKDFExtract(gxybits,derivedbits) in 
+	let shsts:key = DeriveSecret(handshakesecret,S_HS_TRAFFIC,Hash((clienthello,serverhello))) in
+	in(c_ue_seaf,encryptedextension:bitstring);
+	let EncryptedExtension(encryptedex) = encryptedextension in
+	let extentiontbe:bitstring = sdec(encryptedex,shsts) in 
+	let ExtentionToBeEncryped(suportgroup) = extentiontbe in 
+	in(c_ue_seaf,finished:bitstring);
+	let Kfinish:key = DeriveSecret(shsts,FINISHED_LABLE,ZERO) in 
+	let Finished(encryptedfinished) = finished in 
+	let hash:bitstring = Hash((clienthello,serverhello,encryptedextension)) in 
+	if hash = sdec(encryptedfinished,Kfinish) then 
+	event UE_AUTH_AUSF_RESUMPTION(finished);
+
+
+	let chsts:key = DeriveSecret(handshakesecret,C_HS_TRAFFIC,Hash((clienthello,serverhello))) in
+	let finishedue:bitstring = Finished(senc(Hash((clienthello,serverhello,encryptedextension,finished)),Kfinish)) in 
+	event UE_SEND_AUTH_MES_RESUMPTION(finishedue);
+	out(c_ue_seaf,finishedue);
+	let hssbits:bitstring = k2b(handshakesecret) in 
+	let mastersecret:key = HKDFExtract(ZERO,hssbits) in 
+	let resumptionmastersecret:key = DeriveSecret(mastersecret,RES_MASRET,Hash((clienthello,serverhello,encryptedextension,finished,finishedue))) in 
+	let serverapplicationtrafficsecret:key = DeriveSecret(mastersecret,S_AP_TRAFFIC,Hash((clienthello,serverhello,encryptedextension,finished))) in 
+	in(c_ue_seaf,newsessionticket1:bitstring);
+	let NewSessionTicket(encnewsessionticket1) = newsessionticket1 in 
+	let (ticketnonce1:nonce,ticketid1:ticket) = sdec(encnewsessionticket1,serverapplicationtrafficsecret) in 
+	let psk1:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce1))) in 
+	insert UETicketPSK1(ticketid1,psk1).
+
+
+
+
+
+
+let ResumptionAUSF() = 
+	get AUSFTicketPSK1(ticketid1,psk1) in 
+	get AUSFTicketPSK2(ticketid2,psk2) in 
+	get AUSFTicketPSK3(ticketid3,psk3) in
+	in(c_seaf_ausf,clienthello:bitstring);
+	let ClientHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) = clienthello in 
+	let ClientExtention(suportgroup,suportsignature,pskextention,TLS13,PSK_KE,POST_HANDSHARE_AUTH,gx) = extention in 
+	let PskEx(xticketid1,xticketid2,xticketid3) = pskextention in 
+	if xticketid1 = ticketid1 then 
+	let pskextention:pskex = PskEx(ticketid1,xticketid2,xticketid3) in
+	new rand:nonce;
+	new y:exponent;
+	let gy:g = exp(G,y) in 
+	let extention:bitstring = ServerExtention(TLS13,pskextention,gy) in 
+	let serverhello:bitstring = ServerHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) in 
+	out(c_seaf_ausf,serverhello);
+	let psk1bits:bitstring = k2b(psk1) in 
+	let earlysecret:key = HKDFExtract(psk1bits,ZERO) in 
+	let derived:key = DeriveSecret(earlysecret,DERIVED,ZERO) in
+	let gxy:g = exp(gx,y) in  
+	(* gxy to bitstring, derived to bitstring *)
+	let gxybits:bitstring = g2b(gxy) in 
+	let derivedbits:bitstring = k2b(derived) in 
+	let handshakesecret:key = HKDFExtract(gxybits,derivedbits) in 
+	let shsts:key = DeriveSecret(handshakesecret,S_HS_TRAFFIC,Hash((clienthello,serverhello))) in 
+	let extentiontbe:bitstring = ExtentionToBeEncryped(suportgroup) in 
+	let encryptedextension:bitstring = EncryptedExtension(senc(extentiontbe,shsts)) in 
+	out(c_seaf_ausf,encryptedextension);
+	let Kfinish:key = DeriveSecret(shsts,FINISHED_LABLE,ZERO) in 
+	let finished:bitstring = Finished(senc(Hash((clienthello,serverhello,encryptedextension)),Kfinish)) in 
+	event AUSF_SEND_AUTH_MES_RESUMPTION(finished);
+	out(c_seaf_ausf,finished);
+	in(c_seaf_ausf,finishedue:bitstring);
+	let Finished(encryptedfinished) = finishedue in 
+	let hash:bitstring = Hash((clienthello,serverhello,encryptedextension,finished)) in 
+	if hash = sdec(encryptedfinished,Kfinish) then 
+	event AUSF_AUTH_UE_RESUMPTION(finishedue);
+
+	let chsts:key = DeriveSecret(handshakesecret,C_HS_TRAFFIC,Hash((clienthello,serverhello))) in
+	let hssbits:bitstring = k2b(handshakesecret) in 
+	let mastersecret:key = HKDFExtract(ZERO,hssbits) in 
+	let resumptionmastersecret:key = DeriveSecret(mastersecret,RES_MASRET,Hash((clienthello,serverhello,encryptedextension,finished,finishedue))) in 
+	new ticketnonce1:nonce;
+	let psk1:key = DeriveSecret(resumptionmastersecret,RESUMPTION,Hash(n2b(ticketnonce1))) in 
+	new ticketid1:ticket;
+	insert AUSFTicketPSK1(ticketid1,psk1);
+	let serverapplicationtrafficsecret:key = DeriveSecret(mastersecret,S_AP_TRAFFIC,Hash((clienthello,serverhello,encryptedextension,finished))) in 
+	let newsessionticket1:bitstring = NewSessionTicket(senc((ticketnonce1,ticketid1),serverapplicationtrafficsecret)) in  
+	out(c_seaf_ausf,newsessionticket1).
+
+
+
+let linkablity() = 
+	(
+		in(c_ue_seaf,clienthello:bitstring);
+		let ClientHello(TLS12,randue,sessionid,CIPHERSUIT_STRONG,extention) = clienthello in
+		get AttackerSessionId(=sessionid) in 
+		(
+			event LINK_SESSIONID(sessionid)
+		)
+		else 
+		(
+			insert AttackerSessionId(sessionid)
+		) 
+	) |
+	(
+		phase 1;
+		in(c_ue_seaf,clienthello:bitstring);
+		let ClientHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) = clienthello in 
+		let ClientExtention(suportgroup,suportsignature,pskextention,TLS13,PSK_KE,POST_HANDSHARE_AUTH,gx) = extention in 
+		let PskEx(ticketid1,ticketid2,ticketid3) = pskextention in 
+		in(c_ue_seaf,clienthello:bitstring);
+		let ClientHello(TLS12,rand,sessionid,CIPHERSUIT_STRONG,extention) = clienthello in 
+		let ClientExtention(suportgroup,suportsignature,pskextention,TLS13,PSK_KE,POST_HANDSHARE_AUTH,gx) = extention in 
+		let PskEx(xticketid1,xticketid2,xticketid3) = pskextention in 
+		if xticketid1 = ticketid1 || xticketid2 = ticketid2 || xticketid3 = ticketid3 then 
+		event LINK_TICKET(pskextention)
+	).
+
+
+
+
+
+process
+	new sskue:sskey;
+	let spkue:spkey = spk(sskue) in
+	new sskausf:sskey;
+	let spkausf:spkey = spk(sskausf) in 
+	new sessionid:bitstring;
+	insert SessionId(sessionid);
+	!UE(spkausf,sskue) | !SEAF | !AUSF(sskausf,spkue) | !linkablity
+	| phase 1; !ResumptionUE | !ResumptionAUSF
